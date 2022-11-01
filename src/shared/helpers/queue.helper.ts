@@ -1,8 +1,6 @@
-import EventEmitter from 'events';
-
 type Job = () => Promise<void>;
 
-export class Queue extends EventEmitter {
+export class Queue {
   private q: (() => Promise<void>)[] = [];
 
   private flag = true;
