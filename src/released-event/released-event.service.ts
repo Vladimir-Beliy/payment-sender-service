@@ -1,23 +1,26 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { CHAINS, PAYMENT_SENDER_ACCOUNTS } from '../shared/constants';
-import { ChainIdEnum } from '../shared/enums';
-import { EthersService } from '../shared/services/ethers.service';
-import paymentSenderAbi from '../shared/abi/payment-sender.abi.json';
-import path from 'path';
 import fs from 'fs/promises';
+import path from 'path';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BigNumber } from 'ethers';
+import { EthersService } from '../shared/services/ethers.service';
+import { FileService } from '../shared/services/file.service';
 import { configService } from '../shared/config.server';
 import {
   ReleasedEventInterface,
   StoredReleasedEventInterface,
 } from './released-event.interfaces';
-import { formatReleasedEvent, getNextFileName } from './released-event.helpers';
 import {
   EVENTS_PER_FILE,
   RELEASED_EVENT,
   STORAGE_ROOT_DIR_PATH,
 } from './released-event.constants';
-import { FileService } from '../shared/services/file.service';
+import { formatReleasedEvent, getNextFileName } from './released-event.helpers';
 import { Queue } from '../shared/helpers/queue.helper';
+import { CHAINS, PAYMENT_SENDER_ACCOUNTS } from '../shared/constants';
+import { ChainIdEnum } from '../shared/enums';
+import paymentSenderAbi from '../shared/abi/payment-sender.abi.json';
+
+const logger = new Logger('ReleasedEventService');
 
 @Injectable()
 export class ReleasedEventService implements OnModuleInit {
@@ -25,57 +28,79 @@ export class ReleasedEventService implements OnModuleInit {
     this.trackEvent(ChainIdEnum.BSC_TEST);
   }
 
-  private async trackEvent(chianId: ChainIdEnum) {
+  private async trackEvent(chainId: ChainIdEnum) {
     const q = new Queue();
 
-    const storageDir = path.join(STORAGE_ROOT_DIR_PATH, String(chianId));
-
+    const storageDir = this.getStoreDir(chainId);
     const startFromBlock = await this.getLastEventBlock(storageDir);
-
-    const skippedEvents = await this.getSkippedEvents(chianId, startFromBlock);
-
-    q.push(
-      ...skippedEvents.map(
-        (event) => () => this.appendEvent(storageDir, event),
-      ),
-    );
-
-    const provider = EthersService.useRpcWsProvider(CHAINS[chianId].rpcWs);
-
+    const provider = EthersService.useRpcProvider(CHAINS[chainId].rpc);
     const paymentSender = EthersService.useContract(
-      PAYMENT_SENDER_ACCOUNTS[chianId],
+      PAYMENT_SENDER_ACCOUNTS[chainId],
       paymentSenderAbi,
       provider,
     );
 
-    paymentSender.on(
+    let latestBlock = await provider.getBlockNumber();
+    let currentBlock = startFromBlock;
+
+    while (currentBlock <= latestBlock) {
+      const formBlock = currentBlock;
+      const toBlock = currentBlock + EthersService.BLOCKS_PER_REQUEST;
+
+      logger.warn(
+        `Getting past events, blocks range: ${formBlock} - ${toBlock} ...`,
+      );
+
+      const pastEvents: any[] = await paymentSender.queryFilter(
+        RELEASED_EVENT,
+        formBlock,
+        toBlock,
+      );
+
+      q.push(
+        ...pastEvents.map((event) => () => this.appendEvent(storageDir, event)),
+      );
+
+      currentBlock = toBlock + 1;
+
+      if (currentBlock > latestBlock) {
+        latestBlock = await provider.getBlockNumber();
+      }
+    }
+
+    logger.warn(`All past events are got`);
+
+    const providerWs = EthersService.useRpcWsProvider(CHAINS[chainId].rpcWs);
+
+    const paymentSenderWs = EthersService.useContract(
+      PAYMENT_SENDER_ACCOUNTS[chainId],
+      paymentSenderAbi,
+      providerWs,
+    );
+
+    paymentSenderWs.on(
       RELEASED_EVENT,
-      (payee, nonce, amount, event: ReleasedEventInterface) => {
+      (
+        payee,
+        nonce: BigNumber,
+        amount: BigNumber,
+        event: ReleasedEventInterface,
+      ) => {
         q.push(() => this.appendEvent(storageDir, event));
+
+        logger.warn(
+          `${RELEASED_EVENT} - payee: ${payee}, nonce: ${nonce.toString()} amount: ${amount.toString()}`,
+        );
       },
     );
   }
 
-  private async getSkippedEvents(chianId: ChainIdEnum, startFromBlock: number) {
-    const provider = EthersService.useRpcProvider(CHAINS[chianId].rpc);
-
-    const paymentSender = EthersService.useContract(
-      PAYMENT_SENDER_ACCOUNTS[chianId],
-      paymentSenderAbi,
-      provider,
-    );
-
-    const events = await paymentSender.queryFilter(
-      RELEASED_EVENT,
-      startFromBlock,
-    );
-
-    return events as unknown as ReleasedEventInterface;
+  private getStoreDir(chainId: ChainIdEnum) {
+    return path.join(STORAGE_ROOT_DIR_PATH, String(chainId));
   }
 
   private async getLastEventBlock(storageDirPath: string) {
     const startBlock = Number(configService.getCustomKey('START_BLOCK'));
-
     const lastFilePath = await FileService.getLastFilePath(storageDirPath);
 
     if (!lastFilePath) {
@@ -116,9 +141,7 @@ export class ReleasedEventService implements OnModuleInit {
 
     const lastFileName =
       dir.length === 0 ? `${RELEASED_EVENT}-1.json` : dir[dir.length - 1];
-
     const lastFilePath = path.join(storageDirPath, lastFileName);
-
     const lastFile = await fs.readFile(lastFilePath, { flag: 'a+' });
 
     let events: StoredReleasedEventInterface[];

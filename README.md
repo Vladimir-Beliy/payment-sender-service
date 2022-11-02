@@ -2,7 +2,7 @@
 
 The repo base on [Nest](https://github.com/nestjs/nest) framework.
 
-Service creates PaymentVoucher for [PaymentSender](https://github.com/Vladimir-Beliy/payment-sender-contract) contract, listens and stores contract events
+Service creates Payment Voucher for [Payment Sender](https://github.com/Vladimir-Beliy/payment-sender-contract) contract, listens and stores contract events
 
 ## Run server 🚀
 1.

@@ -3,6 +3,8 @@ import { Provider } from '@ethersproject/abstract-provider';
 import { ContractInterface } from '@ethersproject/contracts';
 
 export class EthersService {
+  static readonly BLOCKS_PER_REQUEST = 5000;
+
   static useWallet(privateKey: string, provider = null) {
     return new ethers.Wallet(privateKey, provider);
   }
