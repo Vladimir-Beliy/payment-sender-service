@@ -14,15 +14,14 @@ import { BigNumber } from 'ethers';
 
 @Injectable()
 export class VoucherService {
-  async createVoucher(
+  private readonly VOUCHER_SIGNER =
+    configService.getCustomKey('VOUCHER_SIGNER');
+
+  async create(
     chianId: ChainIdEnum,
     payeeAccount: string,
     amount: string,
   ): Promise<CreateVoucherInterface> {
-    const voucherSigner = EthersService.useWallet(
-      configService.getCustomKey('VOUCHER_SIGNER'),
-    );
-
     const provider = EthersService.useRpcProvider(CHAINS[chianId].rpc);
 
     const paymentSender = EthersService.useContract(
@@ -34,7 +33,8 @@ export class VoucherService {
     const nonceBN: BigNumber = await paymentSender.nonce(payeeAccount);
     const nonce = nonceBN.toString();
 
-    const voucher = await voucherSigner._signTypedData(
+    const voucher = await EthersService.signTypedData(
+      this.VOUCHER_SIGNER,
       PAYMENT_SENDER_DOMAINS[chianId],
       VOUCHER_TYPE,
       {

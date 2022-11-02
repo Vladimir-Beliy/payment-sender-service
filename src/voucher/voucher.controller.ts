@@ -31,6 +31,6 @@ export class VoucherController {
   async createVoucher(
     @Body() { chianId, payeeAccount, amount }: CreateVoucherDto,
   ): Promise<CreatedVoucherDto> {
-    return this._voucherService.createVoucher(chianId, payeeAccount, amount);
+    return this._voucherService.create(chianId, payeeAccount, amount);
   }
 }

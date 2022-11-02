@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+import { ethers, TypedDataDomain, TypedDataField } from 'ethers';
 import { Provider } from '@ethersproject/abstract-provider';
 import { ContractInterface } from '@ethersproject/contracts';
 
@@ -7,6 +7,17 @@ export class EthersService {
 
   static useWallet(privateKey: string, provider = null) {
     return new ethers.Wallet(privateKey, provider);
+  }
+
+  static async signTypedData(
+    privateKey: string,
+    domain: TypedDataDomain,
+    types: Record<string, Array<TypedDataField>>,
+    value: Record<string, any>,
+  ) {
+    const wallet = EthersService.useWallet(privateKey);
+
+    return wallet._signTypedData(domain, types, value);
   }
 
   static useRpcProvider(rpcUrl: string) {
