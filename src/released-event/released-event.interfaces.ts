@@ -1,6 +1,6 @@
-import { BigNumber } from 'ethers';
+import { BigNumber, Event } from 'ethers';
 
-export interface ReleasedEventInterface {
+export interface ReleasedEventInterface extends Event {
   blockNumber: number;
   transactionHash: string;
   args: [string, BigNumber, BigNumber];

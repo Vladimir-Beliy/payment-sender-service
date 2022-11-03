@@ -51,14 +51,17 @@ export class ReleasedEventService implements OnModuleInit {
         `Getting past events, blocks range: ${formBlock} - ${toBlock} ...`,
       );
 
-      const pastEvents: any[] = await paymentSender.queryFilter(
+      const pastEvents = await paymentSender.queryFilter(
         RELEASED_EVENT,
         formBlock,
         toBlock,
       );
 
       q.push(
-        ...pastEvents.map((event) => () => this.appendEvent(storageDir, event)),
+        ...pastEvents.map(
+          (event) => () =>
+            this.appendEvent(storageDir, <ReleasedEventInterface>event),
+        ),
       );
 
       currentBlock = toBlock + 1;
