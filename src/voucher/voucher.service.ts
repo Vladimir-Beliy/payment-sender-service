@@ -18,14 +18,14 @@ export class VoucherService {
     configService.getCustomKey('VOUCHER_SIGNER');
 
   async create(
-    chianId: ChainIdEnum,
+    chainId: ChainIdEnum,
     payeeAccount: string,
     amount: string,
   ): Promise<CreateVoucherInterface> {
-    const provider = EthersService.useRpcProvider(CHAINS[chianId].rpc);
+    const provider = EthersService.useRpcProvider(CHAINS[chainId].rpc);
 
     const paymentSender = EthersService.useContract(
-      PAYMENT_SENDER_ACCOUNTS[chianId],
+      PAYMENT_SENDER_ACCOUNTS[chainId],
       paymentSenderAbi,
       provider,
     );
@@ -35,7 +35,7 @@ export class VoucherService {
 
     const voucher = await EthersService.signTypedData(
       this.VOUCHER_SIGNER,
-      PAYMENT_SENDER_DOMAINS[chianId],
+      PAYMENT_SENDER_DOMAINS[chainId],
       VOUCHER_TYPE,
       {
         payee: payeeAccount,

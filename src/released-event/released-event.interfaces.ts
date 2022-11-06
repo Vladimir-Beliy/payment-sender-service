@@ -1,16 +1,12 @@
-import { BigNumber, Event } from 'ethers';
-
-export interface ReleasedEventInterface extends Event {
-  blockNumber: number;
-  transactionHash: string;
-  args: [string, BigNumber, BigNumber];
-  [k: string]: any;
-}
-
-export interface StoredReleasedEventInterface {
+export interface ReleasedEventInterface {
   blockNumber: number;
   transactionHash: string;
   payee: string;
   nonce: string;
   amount: string;
+}
+
+export interface AppendJobInterface {
+  storageDirPath: string;
+  event: ReleasedEventInterface;
 }

@@ -1,12 +1,8 @@
+import { Event } from 'ethers';
 import { RELEASED_EVENT } from './released-event.constants';
-import {
-  ReleasedEventInterface,
-  StoredReleasedEventInterface,
-} from './released-event.interfaces';
+import { ReleasedEventInterface } from './released-event.interfaces';
 
-export const formatReleasedEvent = (
-  event: ReleasedEventInterface,
-): StoredReleasedEventInterface => {
+export const formatReleasedEvent = (event: Event): ReleasedEventInterface => {
   return {
     payee: event.args[0],
     nonce: event.args[1].toString(),

@@ -7,13 +7,13 @@ import { IsWei } from '../../shared/decorators/wei-validation.decorator copy';
 
 export class CreateVoucherDto {
   @ApiProperty({
-    description: 'Chian ID',
+    description: 'Chain ID',
     required: true,
     example: ChainIdEnum.BSC_TEST,
     enum: Object.values(ChainIdEnum),
   })
   @IsEnum(ChainIdEnum)
-  chianId: ChainIdEnum;
+  chainId: ChainIdEnum;
 
   @ApiProperty({
     description: 'Payee account',

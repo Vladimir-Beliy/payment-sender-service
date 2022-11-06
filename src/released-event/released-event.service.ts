@@ -1,36 +1,39 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
 import { BigNumber } from 'ethers';
 import { EthersService } from '../shared/services/ethers.service';
 import { FileService } from '../shared/services/file.service';
 import { configService } from '../shared/config.server';
 import {
+  AppendJobInterface,
   ReleasedEventInterface,
-  StoredReleasedEventInterface,
 } from './released-event.interfaces';
 import {
-  EVENTS_PER_FILE,
   RELEASED_EVENT,
   STORAGE_ROOT_DIR_PATH,
 } from './released-event.constants';
-import { formatReleasedEvent, getNextFileName } from './released-event.helpers';
-import { Queue } from '../shared/helpers/queue.helper';
+import { formatReleasedEvent } from './released-event.helpers';
 import { CHAINS, PAYMENT_SENDER_ACCOUNTS } from '../shared/constants';
 import { ChainIdEnum } from '../shared/enums';
 import paymentSenderAbi from '../shared/abi/payment-sender.abi.json';
 
-const logger = new Logger('ReleasedEventService');
-
 @Injectable()
 export class ReleasedEventService implements OnModuleInit {
+  private readonly logger = new Logger('ReleasedEventService');
+
+  constructor(
+    @InjectQueue('released-event')
+    private queue: Queue<AppendJobInterface>,
+  ) {}
+
   onModuleInit() {
     this.trackEvent(ChainIdEnum.BSC_TEST);
   }
 
   private async trackEvent(chainId: ChainIdEnum) {
-    const q = new Queue();
-
     const storageDir = this.getStoreDir(chainId);
     const startFromBlock = await this.getLastEventBlock(storageDir);
     const provider = EthersService.useRpcProvider(CHAINS[chainId].rpc);
@@ -47,7 +50,7 @@ export class ReleasedEventService implements OnModuleInit {
       const formBlock = currentBlock;
       const toBlock = currentBlock + EthersService.BLOCKS_PER_REQUEST;
 
-      logger.warn(
+      this.logger.warn(
         `Getting past events, blocks range: ${formBlock} - ${toBlock} ...`,
       );
 
@@ -57,11 +60,14 @@ export class ReleasedEventService implements OnModuleInit {
         toBlock,
       );
 
-      q.push(
-        ...pastEvents.map(
-          (event) => () =>
-            this.appendEvent(storageDir, <ReleasedEventInterface>event),
-        ),
+      this.queue.addBulk(
+        pastEvents.map((event) => ({
+          name: 'append-event',
+          data: {
+            storageDirPath: storageDir,
+            event: formatReleasedEvent(event),
+          },
+        })),
       );
 
       currentBlock = toBlock + 1;
@@ -71,7 +77,7 @@ export class ReleasedEventService implements OnModuleInit {
       }
     }
 
-    logger.warn(`All past events are got`);
+    this.logger.log(`All past events are got`);
 
     const providerWs = EthersService.useRpcWsProvider(CHAINS[chainId].rpcWs);
 
@@ -83,15 +89,13 @@ export class ReleasedEventService implements OnModuleInit {
 
     paymentSenderWs.on(
       RELEASED_EVENT,
-      (
-        payee,
-        nonce: BigNumber,
-        amount: BigNumber,
-        event: ReleasedEventInterface,
-      ) => {
-        q.push(() => this.appendEvent(storageDir, event));
+      (payee, nonce: BigNumber, amount: BigNumber, event) => {
+        this.queue.add('append-event', {
+          storageDirPath: storageDir,
+          event: formatReleasedEvent(event),
+        });
 
-        logger.warn(
+        this.logger.warn(
           `${RELEASED_EVENT} - payee: ${payee}, nonce: ${nonce.toString()} amount: ${amount.toString()}`,
         );
       },
@@ -115,7 +119,7 @@ export class ReleasedEventService implements OnModuleInit {
 
     try {
       prevEvents =
-        FileService.parseJSONFile<StoredReleasedEventInterface[]>(lastFile);
+        FileService.parseJSONFile<ReleasedEventInterface[]>(lastFile);
     } catch (e) {
       return startBlock;
     }
@@ -127,57 +131,5 @@ export class ReleasedEventService implements OnModuleInit {
     const lastEvent = prevEvents[prevEvents.length - 1];
 
     return lastEvent.blockNumber;
-  }
-
-  private async appendEvent(
-    storageDirPath: string,
-    event: ReleasedEventInterface,
-  ) {
-    let dir: string[];
-
-    try {
-      dir = await fs.readdir(storageDirPath);
-    } catch (e) {
-      await fs.mkdir(storageDirPath);
-      dir = await fs.readdir(storageDirPath);
-    }
-
-    const lastFileName =
-      dir.length === 0 ? `${RELEASED_EVENT}-1.json` : dir[dir.length - 1];
-    const lastFilePath = path.join(storageDirPath, lastFileName);
-    const lastFile = await fs.readFile(lastFilePath, { flag: 'a+' });
-
-    let events: StoredReleasedEventInterface[];
-
-    try {
-      events =
-        FileService.parseJSONFile<StoredReleasedEventInterface[]>(lastFile);
-    } catch (e) {
-      events = [];
-    }
-
-    const formattedEvent = formatReleasedEvent(event);
-
-    const alreadyStored = events.find(
-      (e) =>
-        e.payee === formattedEvent.payee && e.nonce === formattedEvent.nonce,
-    );
-
-    if (alreadyStored) {
-      return;
-    }
-
-    let fileName = lastFileName;
-
-    if (events.length >= EVENTS_PER_FILE) {
-      events = [];
-      fileName = getNextFileName(lastFileName);
-    }
-
-    events.push(formattedEvent);
-
-    const filePath = path.join(storageDirPath, fileName);
-
-    await fs.writeFile(filePath, JSON.stringify(events, null, 2));
   }
 }

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  HttpCode,
   HttpStatus,
   Post,
   UsePipes,
@@ -26,11 +27,12 @@ export class VoucherController {
     description: 'Voucher with base data',
     type: CreatedVoucherDto,
   })
+  @HttpCode(HttpStatus.OK)
   @UsePipes(new ValidationPipe(configService.getValidationOptions(true)))
   @Post('/create')
   async createVoucher(
-    @Body() { chianId, payeeAccount, amount }: CreateVoucherDto,
+    @Body() { chainId, payeeAccount, amount }: CreateVoucherDto,
   ): Promise<CreatedVoucherDto> {
-    return this._voucherService.create(chianId, payeeAccount, amount);
+    return this._voucherService.create(chainId, payeeAccount, amount);
   }
 }
