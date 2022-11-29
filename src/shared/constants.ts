@@ -3,7 +3,8 @@ import { Chain } from './interfaces';
 
 export const CHAINS: Record<ChainIdEnum, Chain> = {
   [ChainIdEnum.BSC_TEST]: {
-    rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545',
+    rpc:
+      'https://few-cold-vineyard.bsc-testnet.discover.quiknode.pro/ff5e350007dfaa34a7ea4d9ba487bcbfbd86c579/',
     rpcWs:
       'wss://few-cold-vineyard.bsc-testnet.discover.quiknode.pro/ff5e350007dfaa34a7ea4d9ba487bcbfbd86c579/',
   },
